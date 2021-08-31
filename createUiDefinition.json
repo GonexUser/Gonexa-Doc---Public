@@ -1,0 +1,139 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "basics": [
+      {
+        "name": "Application_Name",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Application Name",
+        "toolTip": "",
+        "visible": true
+      },
+      {
+        "name": "Settings_Usage",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Settings usage (prefix of theh application Name)",
+        "toolTip": "",
+        "visible": true
+      },
+      {
+        "name": "UseSlot",
+        "type": "Microsoft.Common.OptionsGroup",
+        "label": "Use slot",
+        "toolTip": "",
+        "defaultValue": "",
+        "constraints": {
+          "allowedValues": [
+            {
+              "label": "false",
+              "value": false
+            },
+            {
+              "label": "true",
+              "value": true
+            }
+          ],
+          "required": true
+        },
+        "visible": true
+      },
+      {
+        "name": "Application_SKU",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Application Sku",
+        "defaultValue": "S1",
+        "toolTip": "",
+        "visible": true
+      },
+      {
+        "name": "KeyVault_SKU",
+        "type": "Microsoft.Common.OptionsGroup",
+        "label": "KeyVault SKU",
+        "toolTip": "",
+        "defaultValue": "",
+        "constraints": {
+          "allowedValues": [
+            {
+              "label": "Standard",
+              "value": "Standard"
+            },
+            {
+              "label": "Premium",
+              "value": "Premium"
+            }
+          ],
+          "required": true
+        },
+        "visible": true
+      },
+      {
+        "name": "Core_Environment",
+        "type": "Microsoft.Common.OptionsGroup",
+        "label": "Core environment",
+        "toolTip": "",
+        "defaultValue": "",
+        "constraints": {
+          "allowedValues": [
+            {
+              "label": "Development",
+              "value": "Development"
+            },
+            {
+              "label": "Staging",
+              "value": "Staging"
+            },
+            {
+              "label": "Production",
+              "value": "Production"
+            }
+          ],
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "applicationSettings",
+        "label": "Application settings",
+        "subLabel": {
+          "preValidation": "Configure the infrastructure settings",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Application settings",
+        "elements": [
+          {
+            "name": "storageAccount",
+            "type": "Microsoft.Storage.StorageAccountSelector",
+            "label": "Storage account",
+            "toolTip": "Specify storage account name",
+            "constraints": {
+              "allowedTypes": [
+                "Premium_LRS",
+                "Standard_LRS",
+                "Standard_GRS"
+              ]
+            },
+            "options": {
+              "hideExisting": true
+            },
+            "visible": true
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "Product.Name": "[basics('Application_Name').name]",
+      "Settings.Usage": "[basics('Settings_Usage').name]",
+      "Settings.AspNetCoreEnvironment": "[basics('Core_Environment')]",
+      "storageAccount.Name": "[steps('applicationSettings').storageAccount.name]",
+      "StorageAccount.Sku": "[steps('applicationSettings').storageAccount.type]",
+      "Settings.Region": "[location()]",
+      "KeyVault.Sku":"[basics('KeyVault_SKU')]",
+      "AppServicePlan.Sku":"[basics('Application_SKU')]",
+      "AppService.UseSlot":"[basics('UseSlot')]"
+    }
+  }
+}
