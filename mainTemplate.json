@@ -1,0 +1,413 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+       "Product.Name": {
+            "type": "string"
+             
+        },
+        "Settings.AspNetCoreEnvironment":{
+            "type": "string",
+            "allowedValues": [
+                "Development",
+                "Staging",
+                "Production"
+            ]
+        },
+        "Settings.Usage": {
+            "type": "string"
+        },
+        "Settings.Region": {
+            "type": "string"
+        },
+        "AppService.UseSlot": {
+            "type": "bool",
+            "defaultValue": false
+        },
+        "Settings.DurationOfBreakInSeconds": {
+            "type": "int",
+            "defaultValue": 60
+        },
+        "appService.WebTests.Guid": {
+            "type": "string",
+            "defaultValue": "[newGuid()]"
+        },
+       "AppServicePlan.Sku": {
+            "type": "string",
+            "defaultValue": "F1",
+            "allowedValues": [
+                "F1",
+                "D1",
+                "B1",
+                "B2",
+                "B3",
+                "S1",
+                "S2",
+                "S3",
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P1V2",
+                "P2V2",
+                "P3V2",
+                "P1V3",
+                "P2V3",
+                "P3V3"
+            ],
+            "metadata": {
+                "description": "Describes plan's pricing tier and capacity. Check details at https://azure.microsoft.com/en-us/pricing/details/app-service/. Must be at least S1 if using a staging slot"
+            }
+        },
+        "KeyVault.Sku": {
+            "type": "string",
+            "defaultValue": "Standard",
+            "allowedValues": [
+                "Standard",
+                "premium"
+            ],
+            "metadata": {
+                "description": "SKU for the vault"
+            }
+        },
+        "StorageAccount.Sku": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Standard_ZRS",
+                "Premium_LRS",
+                "Premium_ZRS",
+                "Standard_GZRS",
+                "Standard_RAGZRS"
+            ]
+        },
+        "storageAccount.Name":{
+            "type": "string"
+        },
+        "repoURL": {
+            "type": "string",
+            "defaultValue": "https://github.com/GonexUser/Gonexa-Doc---Public.git",
+            "metadata": {
+                "description": "The URL for the GitHub repository that contains the project to deploy."
+            }
+        },
+        "branch": {
+            "type": "string",
+            "defaultValue": "main",
+            "metadata": {
+                "description": "The branch of the GitHub repository to use."
+            }
+        }
+    },
+    "variables": {
+        "suffix": "[concat('-',toupper(parameters('Settings.Usage')),'-',toupper(parameters('Settings.Region')),'-', toupper(parameters('Product.Name')))]",
+        "shortSuffix":"[concat('-',toUpper(parameters('Settings.Usage')),'-',toUpper(parameters('Product.Name')))]",
+        "appInsightName": "[concat('AI', variables('suffix'))]",
+        "apiAppName": "[concat('AS', variables('suffix'))]",
+        "keyVaultName": "[concat('KV', variables('shortSuffix'))]",
+        "keyVaultUri": "[concat('https://',variables('keyVaultName'),'.vault.azure.net')]",
+        "appServicePlan": "[concat('ASP', variables('suffix'))]",
+        "appService-webtest": {
+            "name": "[concat('AS', variables('suffix'), '-AVAILABILTY-TEST')]",
+            "url": "[concat('https://', variables('apiAppName'), '.azurewebsites.net', '/disponibility')]",
+            "expected": 200,
+            "frequency_secs": 3600,
+            "timeout_secs": 30,
+            "failedLocationCount": 1,
+            "guid": "[parameters('appService.WebTests.Guid')]"
+        },
+        "api-config": {
+            "ASPNETCORE_ENVIRONMENT": "[parameters('Settings.AspNetCoreEnvironment')]",
+            "ASPNETCORE_HOSTINGSTARTUP__KEYVAULT__CONFIGURATIONENABLED": "true",
+            "ASPNETCORE_HOSTINGSTARTUP__KEYVAULT__CONFIGURATIONVAULT": "[parameters('KeyVault.Sku')]",
+            "App:ConfigCacheDurationInSeconds": 30,
+            "App:SettingsCacheDurationInSeconds": 1800,
+            "App:ReferentialCacheDurationInSeconds": 1800,
+            "Core:DurationOfBreakInSeconds": "[parameters('Settings.DurationOfBreakInSeconds')]",
+            "Core:UseMocks": false
+        }
+    },
+    "resources": [
+        // {
+        //     "name": "pid-da18a9d5-4606-4749-b82e-746000e0ebb9-partnercenter",
+        //     "type": "Microsoft.Resources/deployments",
+        //     "apiVersion": "2018-05-01",
+        //     "properties": {
+        //       "mode": "Incremental",
+        //       "templateLink": {
+        //           "uri": "https://github.com/GonexUser/Gonexa-Doc---Public.git",
+        //           "contentVersion": "1.0.0.0"
+        //       },
+        //       "debugSetting": {
+        //           "detailLevel":"requestContent, responseContent"
+        //       }
+        //     }
+        // },
+         // Application Insights
+        {
+           "apiVersion": "2015-05-01",
+            "type": "Microsoft.Insights/components",
+            "kind": "web",
+            "name": "[variables('appInsightName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "Application_Type": "web",
+                "DisableIpMasking": true
+            }
+        },
+         // Service Plan
+        {
+            "name": "[variables('appServicePlan')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2018-02-01",
+            "sku": {
+                "name": "[parameters('AppServicePlan.Sku')]"
+            },
+            "dependsOn": [
+            ],
+            "properties": {
+                "name": "[variables('appServicePlan')]",
+                "numberOfWorkers": 1
+            }
+        },
+         //Storage Account
+        {
+            "name": "[parameters('storageAccount.Name')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-06-01",
+            "sku": {
+                "name": "[parameters('storageAccount.Sku')]",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2"
+        },
+        // Storage rules
+        {
+            "name": "[concat(parameters('storageAccount.Name'), '/default')]",
+            "type": "Microsoft.Storage/storageAccounts/managementPolicies",
+            "apiVersion": "2019-04-01",
+            "dependsOn": [
+                "[parameters('storageAccount.Name')]"
+            ],
+            "properties": {
+                "policy": {
+                    "rules": [
+                        {
+                            "name": "deleteImageAfter1Day",
+                            "enabled": true,
+                            "type": "Lifecycle",
+                            "definition": {
+                                "filters": {
+                                    "blobTypes": [
+                                        "blockBlob"
+                                    ],
+                                    "prefixMatch": [
+                                        "exadoc/Images"
+                                    ]
+                                },
+                                "actions": {
+                                    "baseBlob": {
+                                        "delete": {
+                                            "daysAfterModificationGreaterThan": 1
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+         // Health Monitoring
+        {
+            "apiVersion": "2015-05-01",
+            "name": "[variables('appService-webtest').name]",
+            "type": "microsoft.insights/webtests",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "displayName": "Web Test",
+                "[concat('hidden-link:', resourceId('microsoft.insights/components/', variables('appInsightName')))]": "Resource"
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components/', variables('appInsightName'))]"
+            ],
+            "properties": {
+                "syntheticMonitorId": "[variables('appService-webtest').name]",
+                "name": "[variables('appService-webtest').name]",
+                "description": "API Diagnostics",
+                "enabled": true,
+                "frequency": "[variables('appService-webtest').frequency_secs]",
+                "timeout": "[variables('appService-webtest').timeout_secs]",
+                "kind": "ping",
+                "locations": [
+                    {
+                        "Id": "emea-ch-zrh-edge"
+                    },
+                    {
+                        "Id": "emea-fr-pra-edge"
+                    }
+                ],
+                "Configuration": {
+                    "WebTest": "[concat('<WebTest Name=\"', variables('appService-webtest').name, '\"',  ' Id=\"', variables('appService-webtest').guid ,'\"    Enabled=\"True\" CssProjectStructure=\"\" CssIteration=\"\" Timeout=\"0\" WorkItemIds=\"\" xmlns=\"http://microsoft.com/schemas/VisualStudio/TeamTest/2010\" Description=\"\" CredentialUserName=\"\" CredentialPassword=\"\" PreAuthenticate=\"True\" Proxy=\"default\" StopOnError=\"False\" RecordedResultFile=\"\" ResultsLocale=\"\">        <Items>        <Request Method=\"GET\" Guid=\"a5f10126-e4cd-570d-961c-cea43999a200\" Version=\"1.1\" Url=\"', variables('appService-webtest').url ,'\" ThinkTime=\"0\" Timeout=\"300\" ParseDependentRequests=\"True\" FollowRedirects=\"True\" RecordResult=\"True\" Cache=\"False\" ResponseTimeGoal=\"0\" Encoding=\"utf-8\" ExpectedHttpStatusCode=\"', variables('appService-webtest').expected ,'\" ExpectedResponseUrl=\"\" ReportingName=\"\" IgnoreHttpStatusCode=\"False\" /></Items></WebTest>')]"
+                }
+            }
+        },
+        // API App
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('apiAppName')]",
+            "kind": "api",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', variables('appInsightName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlan'))]"
+            ],
+            "properties": {
+                 "name": "[variables('apiAppName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlan'))]",
+                "clientAffinityEnabled": false
+            },
+             "identity": {
+                "type": "SystemAssigned"
+            },
+            "resources": [
+                {
+                    "type": "sourcecontrols",
+                    "apiVersion": "2020-12-01",
+                    "name": "web",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/Sites', variables('apiAppName'))]"
+                    ],
+                    "properties": {
+                        "repoUrl": "[parameters('repoURL')]",
+                        "branch": "[parameters('branch')]",
+                        "isManualIntegration": true
+                    }
+                },
+                 // SLOT
+                {
+                    "condition": "[parameters('AppService.UseSlot')]",
+                    "apiVersion": "2018-11-01",
+                    "name": "Staging",
+                    "type": "slots",
+                    "tags": {
+                        "displayName": "webAppSlots"
+                    },
+                    "location": "[resourceGroup().location]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/Sites', variables('apiAppName'))]"
+                    ],
+                    "properties": {
+                    },
+                    "resources": [
+                    ]
+                }
+            ]
+        },
+         // API config
+         {
+            "name": "[concat(variables('apiAppName'), '/', 'appsettings')]",
+            "type": "Microsoft.Web/sites/config",
+            "apiVersion": "2018-11-01",
+            "tags": {
+                "displayName": "Api App Settings"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/Sites', variables('apiAppName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('appInsightName'))]"
+            ],
+            "properties": "[union(variables('api-config'),json(concat('{\"APPINSIGHTS_INSTRUMENTATIONKEY\":\"',reference(concat('microsoft.insights/components/', variables('appInsightName'))).InstrumentationKey,'\"}')))]"
+        },
+        // Key Vault 
+        {
+            "apiVersion": "2016-10-01",
+            "name": "[variables('keyVaultName')]",
+            "location": "[resourceGroup().location]",
+            "type": "Microsoft.KeyVault/vaults",
+            "tags": {
+                "displayName": "Key Vault"
+            },
+            "dependsOn": [
+                "[variables('apiAppName')]"
+            ],
+            "properties": {
+                "enabledForDeployment": false,
+                "vaultUri": "[variables('keyVaultUri')]",
+                "enabledForTemplateDeployment": false,
+                "enabledForDiskEncryption": false,
+                "accessPolicies": [
+                    {
+                        "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('apiAppName')), '2018-11-01', 'Full').identity.principalId]",
+                        "tenantId": "[subscription().tenantId]",
+                        "permissions": {
+                            "keys": [
+                                "Get",
+                                "List",
+                                "Update",
+                                "Create",
+                                "Import",
+                                "Delete",
+                                "Recover",
+                                "Backup",
+                                "Restore"
+                            ],
+                            "secrets": [
+                                "Get",
+                                "List",
+                                "Set",
+                                "Delete",
+                                "Recover",
+                                "Backup",
+                                "Restore"
+                            ],
+                            "certificates": [
+                                "Get",
+                                "List",
+                                "Update",
+                                "Create",
+                                "Import",
+                                "Delete",
+                                "Recover",
+                                "ManageContacts",
+                                "ManageIssuers",
+                                "GetIssuers",
+                                "ListIssuers",
+                                "SetIssuers",
+                                "DeleteIssuers"
+                            ]
+                        }
+                    }
+                ],
+                "tenantId": "[subscription().tenantId]",
+                "sku": {
+                    "name": "[parameters('KeyVault.sku')]",
+                    "family": "A"
+                }
+            }
+        },
+        {
+            "name": "[concat(variables('keyVaultName'), '/Application--StorageConnectionString')]",
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2015-06-01",
+            "properties": {                                                                                                    
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccount.Name'), ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount.Name')),'2019-06-01').keys[0].value,';EndpointSuffix=core.windows.net')]",
+                "contentType": "string"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ]
+        }
+    ],
+    "outputs": {
+        "AppServiceID": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Web/sites', variables('apiAppName')), '2018-11-01', 'Full').identity.principalId]"
+        }
+    }
+}
